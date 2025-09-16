@@ -1,0 +1,102 @@
+# Multi-arch Dockerfile optimized for ARM64 voice processing
+# Supports both arm64 and amd64 architectures with ARM-specific optimizations
+
+ARG BUILDPLATFORM=linux/amd64
+ARG TARGETPLATFORM=linux/arm64
+
+# Build stage
+FROM --platform=$BUILDPLATFORM node:18-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    linux-headers \
+    libc6-compat
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig.json ./
+
+# Install dependencies with ARM optimizations
+RUN npm ci --only=production --platform=$TARGETPLATFORM
+
+# Copy source code
+COPY src/ ./src/
+
+# Build the application
+RUN npm run build
+
+# Production stage - ARM64 optimized
+FROM --platform=$TARGETPLATFORM node:18-alpine AS production
+
+# Install runtime dependencies for voice processing
+RUN apk add --no-cache \
+    dumb-init \
+    ffmpeg \
+    sox \
+    alsa-utils \
+    pulseaudio-utils \
+    libc6-compat \
+    libstdc++
+
+# Create app user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+WORKDIR /app
+
+# Copy built application from builder stage
+COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
+COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nodejs:nodejs /app/package*.json ./
+
+# Create necessary directories
+RUN mkdir -p /app/cache /app/logs /app/tmp && \
+    chown -R nodejs:nodejs /app/cache /app/logs /app/tmp
+
+# ARM-specific optimizations
+ENV ARM_OPTIMIZATION=true \
+    NEON_SIMD=enabled \
+    CPU_AFFINITY=arm64 \
+    MEMORY_OPTIMIZATION=true \
+    NODE_OPTIONS="--max-old-space-size=768 --optimize-for-size" \
+    UV_THREADPOOL_SIZE=4
+
+# Voice processing specific environment
+ENV AUDIO_SAMPLE_RATE=16000 \
+    AUDIO_CHANNELS=1 \
+    AUDIO_BUFFER_SIZE=4096 \
+    FFT_SIZE=1024 \
+    MAX_AUDIO_DURATION=300 \
+    VOICE_PROCESSING_THREADS=2
+
+# Switch to non-root user
+USER nodejs
+
+# Expose ports
+EXPOSE 3000 8080
+
+# Health check optimized for ARM
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node dist/health.js || exit 1
+
+# Volume for temporary audio processing
+VOLUME ["/app/cache", "/app/logs"]
+
+# Use dumb-init for proper signal handling
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start the application with ARM optimizations
+CMD ["node", "--max-old-space-size=768", "dist/server.js"]
+
+# Multi-arch labels
+LABEL org.opencontainers.image.title="Voice AI API" \
+      org.opencontainers.image.description="ARM-optimized voice processing API with Hume AI integration" \
+      org.opencontainers.image.authors="VoiceAI Team" \
+      org.opencontainers.image.source="https://github.com/your-org/voice-ai-android" \
+      org.opencontainers.image.architecture="$TARGETARCH" \
+      org.opencontainers.image.variant="$TARGETVARIANT"

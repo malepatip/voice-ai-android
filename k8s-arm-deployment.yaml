@@ -1,0 +1,163 @@
+# Kubernetes deployment optimized for ARM64 architecture
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: voice-ai-backend
+  labels:
+    app: voice-ai-backend
+    arch: arm64
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: voice-ai-backend
+  template:
+    metadata:
+      labels:
+        app: voice-ai-backend
+        arch: arm64
+    spec:
+      # ARM64 node selector
+      nodeSelector:
+        kubernetes.io/arch: arm64
+
+      # Prefer ARM nodes
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values: ["arm64"]
+
+      containers:
+      - name: voice-ai-backend
+        image: your-registry/voice-ai-backend:latest
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: HUME_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: voice-ai-secrets
+              key: hume-api-key
+        - name: REDIS_URL
+          value: "redis://redis-service:6379"
+
+        # ARM-optimized resource limits
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        # Security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: voice-ai-service
+spec:
+  selector:
+    app: voice-ai-backend
+  ports:
+  - name: http
+    port: 80
+    targetPort: 3000
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: voice-ai-secrets
+type: Opaque
+stringData:
+  hume-api-key: "your-hume-api-key-here"
+
+---
+# Redis deployment for ARM
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+      volumes:
+      - name: redis-data
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+  type: ClusterIP

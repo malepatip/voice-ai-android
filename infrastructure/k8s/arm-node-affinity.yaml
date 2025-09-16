@@ -1,0 +1,143 @@
+# ARM64 Node Affinity Template
+# Use this as a template for all ARM-optimized deployments
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: arm-node-config
+  namespace: voice-ai
+data:
+  # ARM-specific optimization flags
+  ARM_OPTIMIZATION: "true"
+  CPU_AFFINITY: "arm64"
+  MEMORY_OPTIMIZATION: "true"
+  NEON_SIMD: "enabled"        # ARM NEON SIMD optimizations
+  CACHE_LINE_SIZE: "64"       # ARM64 cache line size
+  PAGE_SIZE: "4096"          # ARM64 page size
+
+  # Voice processing optimizations for ARM
+  AUDIO_BUFFER_SIZE: "4096"   # Optimized for ARM cache
+  FFT_SIZE: "1024"           # ARM-optimized FFT size
+  WORKER_THREADS: "4"        # ARM core count optimization
+
+---
+# Standard ARM64 affinity and node selector template
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: arm-template
+  namespace: voice-ai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: arm-template
+  template:
+    metadata:
+      labels:
+        app: arm-template
+    spec:
+      # Prefer ARM64 nodes
+      affinity:
+        nodeAffinity:
+          # Hard requirement for ARM64
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values: ["arm64"]
+
+          # Prefer specific ARM node types
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values: ["arm64"]
+          - weight: 80
+            preference:
+              matchExpressions:
+              - key: node.kubernetes.io/instance-type
+                operator: In
+                values: ["cax11", "cax21", "cax31", "cax41"]  # Hetzner ARM instance types
+          - weight: 60
+            preference:
+              matchExpressions:
+              - key: topology.kubernetes.io/zone
+                operator: In
+                values: ["eu-central"]
+
+        # Pod anti-affinity for better distribution
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values: ["voice-api"]
+              topologyKey: kubernetes.io/hostname
+
+      # Node selector as backup
+      nodeSelector:
+        kubernetes.io/arch: arm64
+
+      # Tolerations for ARM-specific taints
+      tolerations:
+      - key: "arm64"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      - key: "experimental"
+        operator: "Equal"
+        value: "arm"
+        effect: "NoSchedule"
+
+      containers:
+      - name: example
+        image: example:latest
+
+        # ARM-optimized resource allocation
+        resources:
+          requests:
+            cpu: "100m"          # ARM cores are efficient
+            memory: "128Mi"      # Conservative memory start
+            ephemeral-storage: "512Mi"
+          limits:
+            cpu: "500m"          # Burst capacity
+            memory: "512Mi"      # Memory limit
+            ephemeral-storage: "2Gi"
+
+        # Environment variables for ARM optimization
+        env:
+        - name: ARM_OPTIMIZATION
+          valueFrom:
+            configMapKeyRef:
+              name: arm-node-config
+              key: ARM_OPTIMIZATION
+        - name: CPU_AFFINITY
+          valueFrom:
+            configMapKeyRef:
+              name: arm-node-config
+              key: CPU_AFFINITY
+        - name: NEON_SIMD
+          valueFrom:
+            configMapKeyRef:
+              name: arm-node-config
+              key: NEON_SIMD
+
+        # Security context optimized for ARM
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65534
+          runAsGroup: 65534
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault

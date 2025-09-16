@@ -1,0 +1,148 @@
+# Multi-arch Dockerfile for dedicated voice processing service
+# Optimized for ARM64 with enhanced audio processing capabilities
+
+ARG BUILDPLATFORM=linux/amd64
+ARG TARGETPLATFORM=linux/arm64
+
+# Build stage with cross-compilation support
+FROM --platform=$BUILDPLATFORM node:18-alpine AS builder
+
+# Install build tools and audio libraries
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    cmake \
+    git \
+    linux-headers \
+    libc6-compat \
+    ffmpeg-dev \
+    sox-dev \
+    alsa-lib-dev \
+    portaudio-dev
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig.json ./
+
+# Install dependencies with native compilation for target platform
+ENV npm_config_target_platform=$TARGETPLATFORM
+RUN npm ci --include=dev
+
+# Copy source code
+COPY src/ ./src/
+
+# Build the application
+RUN npm run build
+
+# Production stage - ARM64 optimized for intensive voice processing
+FROM --platform=$TARGETPLATFORM node:18-alpine AS production
+
+# Install comprehensive audio processing stack for ARM
+RUN apk add --no-cache \
+    dumb-init \
+    ffmpeg \
+    sox \
+    alsa-utils \
+    pulseaudio-utils \
+    portaudio \
+    libc6-compat \
+    libstdc++ \
+    fftw \
+    speex \
+    opus \
+    flac \
+    lame \
+    vorbis-tools
+
+# Create app user
+RUN addgroup -g 1001 -S voiceproc && \
+    adduser -S voiceproc -u 1001 -G voiceproc
+
+WORKDIR /app
+
+# Copy built application
+COPY --from=builder --chown=voiceproc:voiceproc /app/dist ./dist
+COPY --from=builder --chown=voiceproc:voiceproc /app/node_modules ./node_modules
+COPY --from=builder --chown=voiceproc:voiceproc /app/package*.json ./
+
+# Create optimized directory structure for audio processing
+RUN mkdir -p \
+    /app/audio/input \
+    /app/audio/output \
+    /app/audio/temp \
+    /app/models \
+    /app/cache \
+    /app/logs && \
+    chown -R voiceproc:voiceproc /app/audio /app/models /app/cache /app/logs
+
+# ARM-specific performance optimizations
+ENV ARM_OPTIMIZATION=true \
+    NEON_SIMD=enabled \
+    ARM_NEON_SUPPORT=1 \
+    CPU_AFFINITY=arm64 \
+    MEMORY_OPTIMIZATION=true \
+    NODE_OPTIONS="--max-old-space-size=1024 --optimize-for-size --experimental-wasm-simd"
+
+# Audio processing optimizations for ARM
+ENV AUDIO_SAMPLE_RATE=16000 \
+    AUDIO_CHANNELS=1 \
+    AUDIO_BUFFER_SIZE=4096 \
+    FFT_SIZE=1024 \
+    OVERLAP_SIZE=512 \
+    WINDOW_SIZE=2048 \
+    MAX_AUDIO_DURATION=300 \
+    VOICE_PROCESSING_THREADS=4 \
+    AUDIO_QUALITY=high \
+    NOISE_REDUCTION=enabled \
+    ECHO_CANCELLATION=enabled
+
+# Hume AI specific configurations
+ENV HUME_SAMPLE_RATE=16000 \
+    HUME_AUDIO_FORMAT=pcm_s16le \
+    HUME_CHANNELS=1 \
+    HUME_CHUNK_SIZE=4096 \
+    HUME_API_TIMEOUT=30000
+
+# Memory management for ARM
+ENV MALLOC_ARENA_MAX=2 \
+    MALLOC_MMAP_THRESHOLD_=131072 \
+    MALLOC_TRIM_THRESHOLD_=131072 \
+    MALLOC_TOP_PAD_=131072 \
+    MALLOC_MMAP_MAX_=65536
+
+# Switch to non-root user
+USER voiceproc
+
+# Expose service port
+EXPOSE 8080
+
+# Advanced health check for voice processing
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD node dist/health-check.js || exit 1
+
+# Volumes for audio processing pipeline
+VOLUME ["/app/audio", "/app/models", "/app/cache", "/app/logs"]
+
+# Use dumb-init for signal handling
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start with ARM-optimized settings
+CMD ["node", \
+     "--max-old-space-size=1024", \
+     "--optimize-for-size", \
+     "--experimental-wasm-simd", \
+     "dist/voice-processor.js"]
+
+# Multi-arch and ARM-specific labels
+LABEL org.opencontainers.image.title="Voice Processor" \
+      org.opencontainers.image.description="ARM64-optimized voice processing service with advanced audio pipeline" \
+      org.opencontainers.image.authors="VoiceAI Team" \
+      org.opencontainers.image.source="https://github.com/your-org/voice-ai-android" \
+      org.opencontainers.image.architecture="$TARGETARCH" \
+      org.opencontainers.image.variant="$TARGETVARIANT" \
+      voice.ai.optimization="arm64" \
+      voice.ai.audio.support="advanced" \
+      voice.ai.simd="neon"

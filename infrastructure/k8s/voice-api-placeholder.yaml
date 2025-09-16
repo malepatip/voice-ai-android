@@ -1,0 +1,147 @@
+# Placeholder deployment for voice-api until custom images are built
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: voice-api-placeholder
+  namespace: voice-ai
+  labels:
+    app: voice-api
+    component: backend
+    arch: arm64
+    version: placeholder
+spec:
+  replicas: 1  # Reduced to 1 for testing
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  selector:
+    matchLabels:
+      app: voice-api
+      component: backend
+
+  template:
+    metadata:
+      labels:
+        app: voice-api
+        component: backend
+        arch: arm64
+        version: placeholder
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+
+    spec:
+      # ARM64 node affinity and selection
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values: ["arm64"]
+
+      nodeSelector:
+        kubernetes.io/arch: arm64
+
+      # Security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+
+      containers:
+      - name: voice-api-placeholder
+        image: nginx:alpine  # Use real image as placeholder
+        imagePullPolicy: Always
+
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+
+        # Basic resource allocation
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+
+        # Environment variables for testing
+        env:
+        - name: NODE_ENV
+          value: "placeholder"
+        - name: ARM_OPTIMIZATION
+          valueFrom:
+            configMapKeyRef:
+              name: arm-node-config
+              key: ARM_OPTIMIZATION
+
+        # Basic health checks
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+        # Security context
+        securityContext:
+          runAsNonRoot: false  # nginx needs root for port 80
+          allowPrivilegeEscalation: false
+
+        # Volume mounts for nginx directories
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: var-cache-nginx
+          mountPath: /var/cache/nginx
+        - name: var-run
+          mountPath: /var/run
+
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 100Mi
+      - name: var-cache-nginx
+        emptyDir:
+          sizeLimit: 100Mi
+      - name: var-run
+        emptyDir:
+          sizeLimit: 10Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: voice-api-placeholder-service
+  namespace: voice-ai
+  labels:
+    app: voice-api
+    component: backend
+    version: placeholder
+spec:
+  type: ClusterIP
+  selector:
+    app: voice-api
+    component: backend
+    version: placeholder
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP

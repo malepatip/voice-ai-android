@@ -1,0 +1,198 @@
+# ARM64-specific optimization configurations
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: arm-performance-config
+  namespace: voice-ai
+  labels:
+    app: voice-ai
+    component: optimization
+    arch: arm64
+data:
+  # ARM CPU optimizations
+  ARM_OPTIMIZATION: "true"
+  CPU_ARCHITECTURE: "arm64"
+  NEON_SIMD_SUPPORT: "enabled"
+  ARM_NEON_ENABLE: "1"
+  CPU_AFFINITY_ENABLED: "true"
+
+  # Memory optimizations for ARM
+  MEMORY_OPTIMIZATION: "true"
+  ARM_MEMORY_MODEL: "relaxed"
+  CACHE_LINE_SIZE: "64"        # ARM64 cache line size
+  PAGE_SIZE: "4096"           # ARM64 page size
+  MEMORY_ALIGNMENT: "8"       # ARM64 alignment
+
+  # Audio processing optimizations
+  AUDIO_BUFFER_SIZE: "4096"   # Optimized for ARM cache
+  AUDIO_FRAME_SIZE: "1024"    # ARM-friendly frame size
+  FFT_SIZE: "1024"           # ARM-optimized FFT
+  OVERLAP_SIZE: "512"        # 50% overlap for ARM
+  WINDOW_SIZE: "2048"        # ARM cache-friendly window
+
+  # Voice processing parameters
+  VOICE_SAMPLE_RATE: "16000"  # Hume AI compatible
+  VOICE_CHANNELS: "1"         # Mono for efficiency
+  VOICE_BIT_DEPTH: "16"       # 16-bit for ARM optimization
+  VOICE_ENCODING: "pcm_s16le" # Little-endian for ARM
+
+  # Threading optimizations
+  WORKER_THREADS: "4"         # ARM core count
+  AUDIO_THREADS: "2"          # Dedicated audio threads
+  PROCESSING_THREADS: "2"     # Voice processing threads
+  IO_THREADS: "1"            # I/O operations
+
+  # ARM compiler optimizations
+  ARM_COMPILER_FLAGS: "-mcpu=native -mtune=native -mfpu=neon"
+  NODE_OPTIMIZATION: "--optimize-for-size --experimental-wasm-simd"
+
+  # Performance monitoring
+  PERFORMANCE_MONITORING: "enabled"
+  CPU_PROFILING: "enabled"
+  MEMORY_PROFILING: "enabled"
+  AUDIO_LATENCY_TRACKING: "enabled"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hume-ai-config
+  namespace: voice-ai
+  labels:
+    app: voice-ai
+    component: hume-integration
+    service: external-api
+data:
+  # Hume AI API configuration
+  HUME_API_VERSION: "v0"
+  HUME_ENDPOINT: "api.hume.ai"
+  HUME_WEBSOCKET_ENDPOINT: "api.hume.ai/v0/stream/models"
+
+  # Audio format for Hume AI
+  HUME_AUDIO_FORMAT: "pcm_s16le"
+  HUME_SAMPLE_RATE: "16000"
+  HUME_CHANNELS: "1"
+  HUME_CHUNK_SIZE: "4096"
+  HUME_MAX_CHUNK_SIZE: "8192"
+
+  # Connection settings
+  HUME_CONNECTION_TIMEOUT: "30000"
+  HUME_READ_TIMEOUT: "60000"
+  HUME_RETRY_ATTEMPTS: "3"
+  HUME_RETRY_DELAY: "1000"
+
+  # Rate limiting for free tier
+  HUME_RATE_LIMIT_ENABLED: "true"
+  HUME_MAX_REQUESTS_PER_MINUTE: "10"
+  HUME_MAX_AUDIO_MINUTES_PER_MONTH: "10"
+  HUME_USAGE_TRACKING: "enabled"
+
+  # ARM-specific WebSocket settings
+  WEBSOCKET_BUFFER_SIZE: "8192"
+  WEBSOCKET_MAX_FRAME_SIZE: "16384"
+  WEBSOCKET_COMPRESSION: "enabled"
+  WEBSOCKET_HEARTBEAT: "30"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: monitoring-config
+  namespace: voice-ai
+  labels:
+    app: voice-ai
+    component: monitoring
+    arch: arm64
+data:
+  # Prometheus metrics
+  METRICS_ENABLED: "true"
+  METRICS_PORT: "9090"
+  METRICS_PATH: "/metrics"
+
+  # ARM-specific metrics
+  ARM_CPU_METRICS: "enabled"
+  ARM_MEMORY_METRICS: "enabled"
+  ARM_TEMPERATURE_MONITORING: "enabled"
+
+  # Audio processing metrics
+  AUDIO_LATENCY_METRICS: "enabled"
+  VOICE_QUALITY_METRICS: "enabled"
+  PROCESSING_TIME_METRICS: "enabled"
+
+  # Resource usage tracking
+  CPU_USAGE_THRESHOLD: "80"
+  MEMORY_USAGE_THRESHOLD: "85"
+  DISK_USAGE_THRESHOLD: "90"
+
+  # Alerting thresholds for cost control
+  COST_ALERT_CPU_THRESHOLD: "70"
+  COST_ALERT_MEMORY_THRESHOLD: "75"
+  COST_ALERT_BANDWIDTH_THRESHOLD: "80"
+
+---
+# Performance tuning via sysctl for ARM
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sysctl-arm-tuning
+  namespace: voice-ai
+  labels:
+    app: voice-ai
+    component: system-tuning
+    arch: arm64
+data:
+  # Network optimizations for ARM
+  net.core.rmem_max: "16777216"
+  net.core.wmem_max: "16777216"
+  net.ipv4.tcp_rmem: "4096 87380 16777216"
+  net.ipv4.tcp_wmem: "4096 65536 16777216"
+
+  # Memory management for ARM
+  vm.swappiness: "10"
+  vm.dirty_ratio: "15"
+  vm.dirty_background_ratio: "5"
+
+  # Audio processing optimizations
+  kernel.sched_rt_runtime_us: "950000"
+  kernel.sched_rt_period_us: "1000000"
+
+---
+# Init container for ARM system optimizations
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: arm-init-script
+  namespace: voice-ai
+  labels:
+    app: voice-ai
+    component: initialization
+    arch: arm64
+data:
+  init-arm-optimizations.sh: |
+    #!/bin/bash
+    set -euo pipefail
+
+    echo "Applying ARM64-specific optimizations..."
+
+    # CPU governor optimization for ARM
+    if [ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]; then
+        echo "performance" > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor || true
+    fi
+
+    # ARM cache optimizations
+    if [ -d /proc/sys/vm ]; then
+        echo 1 > /proc/sys/vm/drop_caches || true
+    fi
+
+    # Audio subsystem optimizations
+    if [ -f /proc/asound/version ]; then
+        echo "Audio subsystem detected, applying optimizations..."
+    fi
+
+    # ARM NEON verification
+    if grep -q neon /proc/cpuinfo; then
+        echo "ARM NEON SIMD support detected and enabled"
+        export ARM_NEON_SUPPORT=1
+    fi
+
+    echo "ARM64 optimizations applied successfully"

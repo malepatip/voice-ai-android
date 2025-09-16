@@ -1,0 +1,189 @@
+# Cost optimization configurations without optional CRDs
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cost-optimization-config
+  namespace: voice-ai
+  labels:
+    app: voice-ai
+    component: cost-control
+    tier: optimization
+data:
+  # Resource allocation strategy
+  COST_OPTIMIZATION_ENABLED: "true"
+  RESOURCE_ALLOCATION_MODE: "conservative"
+  SCALING_STRATEGY: "cost-aware"
+
+  # CPU cost optimization
+  CPU_BURST_ENABLED: "true"
+  CPU_BURST_THRESHOLD: "70"
+  CPU_THROTTLING_ENABLED: "true"
+  CPU_IDLE_SCALING: "enabled"
+
+  # Memory optimization
+  MEMORY_COMPRESSION: "enabled"
+  MEMORY_SWAP_THRESHOLD: "85"
+  MEMORY_CLEANUP_INTERVAL: "300"
+
+  # Network cost control
+  BANDWIDTH_MONITORING: "enabled"
+  BANDWIDTH_LIMIT_MBPS: "100"
+  COMPRESSION_ENABLED: "true"
+
+  # Storage optimization
+  STORAGE_CLEANUP_ENABLED: "true"
+  STORAGE_RETENTION_DAYS: "7"
+  LOG_ROTATION_SIZE: "100M"
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: voice-api-pdb
+  namespace: voice-ai
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: voice-api
+
+---
+# Network Policy for cost-effective traffic control
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: voice-ai-cost-control
+  namespace: voice-ai
+spec:
+  podSelector:
+    matchLabels:
+      app: voice-ai
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: voice-ai
+    - podSelector:
+        matchLabels:
+          app: voice-ai
+    ports:
+    - protocol: TCP
+      port: 3000
+    - protocol: TCP
+      port: 8080
+  egress:
+  # Allow DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow HTTPS for Hume AI (restricted)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow internal communication
+  - to:
+    - podSelector:
+        matchLabels:
+          app: voice-ai
+
+---
+# Priority Classes for cost-aware scheduling
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: voice-ai-high-priority
+value: 1000
+globalDefault: false
+description: "High priority for critical voice AI components"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: voice-ai-low-priority
+value: 100
+globalDefault: false
+description: "Low priority for background voice AI components"
+
+---
+# Cost-optimized CronJobs for cleanup
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: audio-cache-cleanup
+  namespace: voice-ai
+spec:
+  schedule: "0 */6 * * *"  # Every 6 hours
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: cleanup
+            image: alpine:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              # Clean up audio cache older than 6 hours
+              find /app/cache -type f -mtime +0.25 -delete
+              # Clean up temp files
+              find /tmp -type f -name "audio_*" -mtime +0.125 -delete
+              echo "Cleanup completed at $(date)"
+            volumeMounts:
+            - name: audio-cache
+              mountPath: /app/cache
+            resources:
+              requests:
+                cpu: 10m
+                memory: 16Mi
+              limits:
+                cpu: 50m
+                memory: 64Mi
+          volumes:
+          - name: audio-cache
+            persistentVolumeClaim:
+              claimName: audio-cache-pvc
+          nodeSelector:
+            kubernetes.io/arch: arm64
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: log-rotation
+  namespace: voice-ai
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: log-rotation
+            image: alpine:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              # Rotate logs older than 7 days
+              find /app/logs -name "*.log" -mtime +7 -delete
+              # Compress logs older than 1 day
+              find /app/logs -name "*.log" -mtime +1 -exec gzip {} \;
+              echo "Log rotation completed at $(date)"
+            resources:
+              requests:
+                cpu: 10m
+                memory: 16Mi
+              limits:
+                cpu: 50m
+                memory: 64Mi
+          nodeSelector:
+            kubernetes.io/arch: arm64

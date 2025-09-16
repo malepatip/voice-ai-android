@@ -1,0 +1,50 @@
+# Optional CRDs - only apply if VPA and Prometheus Operator are installed
+
+---
+# Vertical Pod Autoscaler (only if VPA is installed)
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: voice-api-vpa
+  namespace: voice-ai
+  annotations:
+    kubectl.kubernetes.io/optional: "true"
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: voice-api
+  updatePolicy:
+    updateMode: "Off"  # Changed from Auto to Off for safety
+  resourcePolicy:
+    containerPolicies:
+    - containerName: voice-api
+      minAllowed:
+        cpu: 50m
+        memory: 64Mi
+      maxAllowed:
+        cpu: 1000m
+        memory: 1Gi
+      controlledResources: ["cpu", "memory"]
+
+---
+# Service Monitor for Prometheus (only if Prometheus Operator is installed)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: voice-ai-cost-metrics
+  namespace: voice-ai
+  labels:
+    app: voice-ai
+    component: monitoring
+  annotations:
+    kubectl.kubernetes.io/optional: "true"
+spec:
+  selector:
+    matchLabels:
+      app: voice-api
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s

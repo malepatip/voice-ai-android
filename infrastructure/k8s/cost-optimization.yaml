@@ -1,0 +1,290 @@
+# Cost optimization configurations for Hetzner ARM VPS
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cost-optimization-config
+  namespace: voice-ai
+  labels:
+    app: voice-ai
+    component: cost-control
+    tier: optimization
+data:
+  # Resource allocation strategy
+  COST_OPTIMIZATION_ENABLED: "true"
+  RESOURCE_ALLOCATION_MODE: "conservative"
+  SCALING_STRATEGY: "cost-aware"
+
+  # CPU cost optimization
+  CPU_BURST_ENABLED: "true"
+  CPU_BURST_THRESHOLD: "70"
+  CPU_THROTTLING_ENABLED: "true"
+  CPU_IDLE_SCALING: "enabled"
+
+  # Memory optimization
+  MEMORY_COMPRESSION: "enabled"
+  MEMORY_SWAP_THRESHOLD: "85"
+  MEMORY_CLEANUP_INTERVAL: "300"
+
+  # Network cost control
+  BANDWIDTH_MONITORING: "enabled"
+  BANDWIDTH_LIMIT_MBPS: "100"
+  COMPRESSION_ENABLED: "true"
+
+  # Storage optimization
+  STORAGE_CLEANUP_ENABLED: "true"
+  STORAGE_RETENTION_DAYS: "7"
+  LOG_ROTATION_SIZE: "100M"
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: voice-api-pdb
+  namespace: voice-ai
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: voice-api
+
+---
+# Vertical Pod Autoscaler for cost-effective resource allocation
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: voice-api-vpa
+  namespace: voice-ai
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: voice-api
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: voice-api
+      minAllowed:
+        cpu: 50m
+        memory: 64Mi
+      maxAllowed:
+        cpu: 1000m
+        memory: 1Gi
+      controlledResources: ["cpu", "memory"]
+
+---
+# Network Policy for cost-effective traffic control
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: voice-ai-cost-control
+  namespace: voice-ai
+spec:
+  podSelector:
+    matchLabels:
+      app: voice-ai
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: voice-ai
+    - podSelector:
+        matchLabels:
+          app: voice-ai
+    ports:
+    - protocol: TCP
+      port: 3000
+    - protocol: TCP
+      port: 8080
+  egress:
+  # Allow DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow HTTPS for Hume AI (restricted)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow internal communication
+  - to:
+    - podSelector:
+        matchLabels:
+          app: voice-ai
+
+---
+# Priority Classes for cost-aware scheduling
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: voice-ai-high-priority
+value: 1000
+globalDefault: false
+description: "High priority for critical voice AI components"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: voice-ai-low-priority
+value: 100
+globalDefault: false
+description: "Low priority for background voice AI components"
+
+---
+# Resource monitoring and alerting
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cost-monitoring-rules
+  namespace: voice-ai
+data:
+  resource-alerts.yaml: |
+    groups:
+    - name: voice-ai-cost-alerts
+      rules:
+      # CPU cost alerts
+      - alert: HighCPUUsage
+        expr: (rate(container_cpu_usage_seconds_total{namespace="voice-ai"}[5m]) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          cost_impact: high
+        annotations:
+          summary: "High CPU usage detected in voice-ai namespace"
+          description: "CPU usage is above 80% for 5 minutes"
+
+      # Memory cost alerts
+      - alert: HighMemoryUsage
+        expr: (container_memory_usage_bytes{namespace="voice-ai"} / container_spec_memory_limit_bytes{namespace="voice-ai"}) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          cost_impact: high
+        annotations:
+          summary: "High memory usage detected in voice-ai namespace"
+          description: "Memory usage is above 85% of limit"
+
+      # Storage cost alerts
+      - alert: HighStorageUsage
+        expr: (kubelet_volume_stats_used_bytes{namespace="voice-ai"} / kubelet_volume_stats_capacity_bytes{namespace="voice-ai"}) > 0.90
+        for: 10m
+        labels:
+          severity: critical
+          cost_impact: medium
+        annotations:
+          summary: "High storage usage detected"
+          description: "Storage usage is above 90% of capacity"
+
+      # Hume AI usage alerts
+      - alert: HumeAPIUsageHigh
+        expr: hume_api_usage_minutes_total > 8
+        for: 1m
+        labels:
+          severity: critical
+          cost_impact: critical
+        annotations:
+          summary: "Hume AI usage approaching free tier limit"
+          description: "Used {{ $value }} minutes of 10-minute free tier"
+
+---
+# Cost-optimized CronJobs for cleanup
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: audio-cache-cleanup
+  namespace: voice-ai
+spec:
+  schedule: "0 */6 * * *"  # Every 6 hours
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: cleanup
+            image: alpine:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              # Clean up audio cache older than 6 hours
+              find /app/cache -type f -mtime +0.25 -delete
+              # Clean up temp files
+              find /tmp -type f -name "audio_*" -mtime +0.125 -delete
+              echo "Cleanup completed at $(date)"
+            volumeMounts:
+            - name: audio-cache
+              mountPath: /app/cache
+            resources:
+              requests:
+                cpu: 10m
+                memory: 16Mi
+              limits:
+                cpu: 50m
+                memory: 64Mi
+          volumes:
+          - name: audio-cache
+            persistentVolumeClaim:
+              claimName: audio-cache-pvc
+          nodeSelector:
+            kubernetes.io/arch: arm64
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: log-rotation
+  namespace: voice-ai
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: log-rotation
+            image: alpine:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              # Rotate logs older than 7 days
+              find /app/logs -name "*.log" -mtime +7 -delete
+              # Compress logs older than 1 day
+              find /app/logs -name "*.log" -mtime +1 -exec gzip {} \;
+              echo "Log rotation completed at $(date)"
+            resources:
+              requests:
+                cpu: 10m
+                memory: 16Mi
+              limits:
+                cpu: 50m
+                memory: 64Mi
+          nodeSelector:
+            kubernetes.io/arch: arm64
+
+---
+# Service Monitor for cost tracking
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: voice-ai-cost-metrics
+  namespace: voice-ai
+  labels:
+    app: voice-ai
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: voice-api
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
