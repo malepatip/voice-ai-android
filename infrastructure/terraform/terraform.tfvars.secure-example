@@ -1,0 +1,32 @@
+# Terraform variables for Hetzner ARM deployment
+# COPY THIS FILE TO terraform.tfvars AND UPDATE WITH YOUR VALUES
+
+# Kubernetes configuration
+kubeconfig_path = "~/.kube/config"
+kube_context    = "hetzner-k3s-default"  # Your Hetzner cluster context name
+namespace       = "voice-ai"
+environment     = "dev"
+
+# Resource limits (adjust based on your Hetzner VPS specs)
+cpu_quota    = "2000m"  # 2 CPU cores
+memory_quota = "4Gi"    # 4GB RAM
+cpu_limit    = "3000m"  # 3 CPU cores max burst
+memory_limit = "6Gi"    # 6GB RAM max burst
+
+# Storage configuration
+storage_size  = "10Gi"
+storage_class = "local-path"  # K3s default storage class
+
+# Secrets - NEVER COMMIT THESE VALUES
+# Get your Hume AI credentials from: https://dev.hume.ai
+hume_api_key = "REPLACE_WITH_YOUR_HUME_API_KEY"
+hume_secret_key = "REPLACE_WITH_YOUR_HUME_SECRET_KEY"
+jwt_secret   = "REPLACE_WITH_RANDOM_64_CHAR_STRING"  # Generate with: openssl rand -hex 32
+database_url = ""  # Optional - leave empty if not using external database
+
+# ARM-specific settings
+arm_node_selector = {
+  "kubernetes.io/arch" = "arm64"
+}
+
+preferred_node_zones = ["eu-central"]

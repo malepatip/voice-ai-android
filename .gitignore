@@ -1,0 +1,74 @@
+# SECURITY: Never commit secrets, API keys, or sensitive data
+*.secret
+*.key
+.env
+.env.local
+.env.*.local
+
+# Terraform sensitive files
+infrastructure/terraform/terraform.tfvars
+infrastructure/terraform/terraform.tfstate*
+infrastructure/terraform/.terraform/
+infrastructure/terraform/*.tfplan
+infrastructure/terraform/.terraform.lock.hcl
+
+# Kubernetes sensitive configs
+kubeconfig
+kubeconfig.*
+*kubeconfig*
+
+# API Keys and Secrets
+*api-key*
+*secret-key*
+*token*
+*password*
+secrets/
+credentials/
+
+# Android sensitive files
+app/google-services.json
+app/src/main/res/values/secrets.xml
+keystore.properties
+*.keystore
+*.jks
+
+# Build outputs
+build/
+*/build/
+.gradle/
+local.properties
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+*.log
+
+# Docker sensitive
+.docker/
+docker-compose.override.yml
+
+# Cloud provider configs
+.aws/
+.azure/
+.gcloud/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Backup files
+*.bak
+*.backup
+
+# Local development
+.local/
+dev-*/
