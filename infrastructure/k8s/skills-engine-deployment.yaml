@@ -1,0 +1,317 @@
+---
+# ConfigMap for Skills Engine
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: skills-config
+  namespace: voice-ai
+  labels:
+    app: skills-engine
+data:
+  # LLM endpoints
+  LLAMA_3B_ENDPOINT: "http://llama-3b-service:8080"
+  LLAMA_1B_ENDPOINT: "http://llama-1b-service:8080"
+
+  # Redis configuration
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+
+  # Skill configuration
+  ENABLED_SKILLS: "weather,timer,calculation,web_search,calendar"
+  SKILL_TIMEOUT_MS: "5000"
+  MAX_CONCURRENT_SKILLS: "10"
+
+  # API endpoints (for skills that need external APIs)
+  WEATHER_API_BASE: "https://api.openweathermap.org/data/2.5"
+  SEARCH_API_BASE: "https://api.duckduckgo.com"
+
+---
+# Deployment for Skills Engine
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skills-engine
+  namespace: voice-ai
+  labels:
+    app: skills-engine
+    component: backend
+    arch: arm64
+    version: v1
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+
+  selector:
+    matchLabels:
+      app: skills-engine
+      component: backend
+
+  template:
+    metadata:
+      labels:
+        app: skills-engine
+        component: backend
+        arch: arm64
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/metrics"
+
+    spec:
+      # ARM64 node affinity
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values: ["arm64"]
+
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values: ["skills-engine"]
+              topologyKey: kubernetes.io/hostname
+
+      nodeSelector:
+        kubernetes.io/arch: arm64
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+
+      serviceAccountName: skills-engine
+
+      containers:
+      - name: skills-engine
+        image: ghcr.io/malepatip/voice-ai/skills-engine:latest
+        imagePullPolicy: Always
+
+        ports:
+        - name: http
+          containerPort: 3000
+          protocol: TCP
+
+        # Resource allocation for skills orchestration
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+            ephemeral-storage: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+            ephemeral-storage: "1Gi"
+
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "3000"
+
+        # LLM endpoints
+        - name: LLAMA_3B_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: skills-config
+              key: LLAMA_3B_ENDPOINT
+        - name: LLAMA_1B_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: skills-config
+              key: LLAMA_1B_ENDPOINT
+
+        # Redis configuration
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: skills-config
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: skills-config
+              key: REDIS_PORT
+
+        # Skills configuration
+        - name: ENABLED_SKILLS
+          valueFrom:
+            configMapKeyRef:
+              name: skills-config
+              key: ENABLED_SKILLS
+        - name: SKILL_TIMEOUT_MS
+          valueFrom:
+            configMapKeyRef:
+              name: skills-config
+              key: SKILL_TIMEOUT_MS
+
+        # API keys (from secrets)
+        - name: WEATHER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: skills-secrets
+              key: weather-api-key
+              optional: true
+        - name: SEARCH_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: skills-secrets
+              key: search-api-key
+              optional: true
+
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 10
+
+        # Security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /app/cache
+
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 512Mi
+      - name: cache
+        emptyDir:
+          sizeLimit: 256Mi
+
+      dnsPolicy: ClusterFirst
+
+---
+# Service for Skills Engine
+apiVersion: v1
+kind: Service
+metadata:
+  name: skills-engine-service
+  namespace: voice-ai
+  labels:
+    app: skills-engine
+    component: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: skills-engine
+    component: backend
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+
+---
+# Service Account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: skills-engine
+  namespace: voice-ai
+  labels:
+    app: skills-engine
+automountServiceAccountToken: false
+
+---
+# HPA for Skills Engine
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: skills-engine-hpa
+  namespace: voice-ai
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: skills-engine
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 75
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 180
+      policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 120
+
+---
+# Secrets placeholder (create separately with actual keys)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: skills-secrets
+  namespace: voice-ai
+  labels:
+    app: skills-engine
+type: Opaque
+stringData:
+  weather-api-key: "YOUR_OPENWEATHERMAP_API_KEY"  # Replace with actual key
+  search-api-key: "YOUR_SEARCH_API_KEY"  # Optional

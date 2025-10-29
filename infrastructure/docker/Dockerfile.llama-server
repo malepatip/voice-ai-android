@@ -1,0 +1,64 @@
+# Multi-stage Docker build for llama.cpp server on ARM64
+# Optimized for Oracle Cloud A1 (ARM) instances
+
+FROM --platform=linux/arm64 alpine:3.18 AS builder
+
+# Install build dependencies
+RUN apk add --no-cache \
+    build-base \
+    cmake \
+    git \
+    curl \
+    ca-certificates
+
+# Clone llama.cpp
+WORKDIR /build
+RUN git clone --depth 1 --branch master https://github.com/ggerganov/llama.cpp.git
+
+WORKDIR /build/llama.cpp
+
+# Build with ARM NEON optimizations
+RUN mkdir build && cd build && \
+    cmake .. \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DLLAMA_NATIVE=ON \
+        -DLLAMA_BUILD_SERVER=ON \
+        -DLLAMA_BUILD_TESTS=OFF \
+        -DLLAMA_BUILD_EXAMPLES=OFF \
+        -DCMAKE_C_FLAGS="-march=armv8-a+simd -mtune=native -O3" \
+        -DCMAKE_CXX_FLAGS="-march=armv8-a+simd -mtune=native -O3" && \
+    cmake --build . --config Release --target llama-server -j$(nproc)
+
+# Runtime stage
+FROM --platform=linux/arm64 alpine:3.18
+
+# Install runtime dependencies
+RUN apk add --no-cache \
+    libstdc++ \
+    libgcc \
+    ca-certificates && \
+    addgroup -g 1001 llama && \
+    adduser -D -u 1001 -G llama llama
+
+# Copy binary from builder
+COPY --from=builder /build/llama.cpp/build/bin/llama-server /app/llama-server
+
+# Create directories
+RUN mkdir -p /models /tmp && \
+    chown -R llama:llama /app /models /tmp
+
+# Switch to non-root user
+USER llama
+
+WORKDIR /app
+
+# Expose server port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+
+# Default command (will be overridden by K8s args)
+ENTRYPOINT ["/app/llama-server"]
+CMD ["--help"]
