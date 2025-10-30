@@ -20,7 +20,7 @@ import java.nio.ByteOrder
  */
 class SimpleTTSRepository(private val context: Context) {
 
-    private val apiKey = "YOUR_API_KEY_HERE"  // TODO: Replace with actual key
+    private val apiKey = "sk_car_vkqqCHBLeNEDxBDMMAzuZj"
 
     private val retrofit = Retrofit.Builder()
         .baseUrl("https://api.cartesia.ai/")
