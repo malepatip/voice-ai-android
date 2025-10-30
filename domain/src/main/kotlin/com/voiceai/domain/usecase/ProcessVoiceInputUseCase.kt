@@ -4,7 +4,12 @@ import com.voiceai.domain.entity.*
 import com.voiceai.domain.repository.ConversationRepository
 import com.voiceai.domain.repository.InferenceRepository
 import com.voiceai.domain.repository.MetricsRepository
+import com.voiceai.domain.repository.TTSRepository
+import com.voiceai.domain.repository.TTSOutput
 import com.voiceai.domain.router.InferenceRouter
+import com.voiceai.domain.router.TTSRouter
+import com.voiceai.domain.router.TTSDecision
+import com.voiceai.domain.router.TTSPreference
 import javax.inject.Inject
 
 /**
@@ -15,13 +20,17 @@ class ProcessVoiceInputUseCase @Inject constructor(
     private val inferenceRepository: InferenceRepository,
     private val conversationRepository: ConversationRepository,
     private val metricsRepository: MetricsRepository,
-    private val inferenceRouter: InferenceRouter
+    private val ttsRepository: TTSRepository,
+    private val inferenceRouter: InferenceRouter,
+    private val ttsRouter: TTSRouter
 ) {
     suspend operator fun invoke(
         voiceInput: VoiceInput,
         sessionId: String,
         userId: String,
-        userPreference: UserPreference = UserPreference.BALANCED
+        userPreference: UserPreference = UserPreference.BALANCED,
+        ttsPreference: TTSPreference = TTSPreference.BALANCED,
+        batteryLevel: Float = 1.0f
     ): Result<VoiceProcessingResult> {
         val startTime = System.currentTimeMillis()
         val metrics = ProcessingMetrics()
@@ -87,7 +96,33 @@ class ProcessVoiceInputUseCase @Inject constructor(
 
             val response = responseResult.getOrThrow()
 
-            // 7. Update conversation
+            // 7. TTS synthesis
+            val ttsStartTime = System.currentTimeMillis()
+            val ttsDecision = ttsRouter.route(
+                response = response,
+                emotion = emotion,
+                networkAvailable = inferenceRepository.isBackendAvailable(),
+                batteryLevel = batteryLevel,
+                userPreference = ttsPreference
+            )
+
+            val ttsOutputResult = when (ttsDecision) {
+                is TTSDecision.OnDevice -> {
+                    ttsRepository.synthesizeOnDevice(response.content)
+                }
+                is TTSDecision.Sonic3 -> {
+                    ttsRepository.synthesizeSonic3(
+                        text = response.content,
+                        emotion = ttsDecision.emotion,
+                        speed = ttsDecision.speed,
+                        voiceId = ttsDecision.voiceId
+                    )
+                }
+            }
+            val ttsLatency = System.currentTimeMillis() - ttsStartTime
+            val ttsOutput = ttsOutputResult.getOrNull()
+
+            // 8. Update conversation
             val userTurn = ConversationTurn(
                 role = ConversationTurn.Role.USER,
                 content = text,
@@ -109,13 +144,14 @@ class ProcessVoiceInputUseCase @Inject constructor(
             conversationRepository.addTurn(sessionId, userTurn)
             conversationRepository.addTurn(sessionId, assistantTurn)
 
-            // 8. Log metrics
+            // 9. Log metrics
             val totalLatency = System.currentTimeMillis() - startTime
             val processingMetrics = ProcessingMetrics(
                 emotionDetectionMs = emotionLatency,
                 intentClassificationMs = intentLatency,
                 routingDecisionMs = routingLatency,
                 inferenceLatencyMs = inferenceLatency,
+                ttsLatencyMs = ttsLatency,
                 totalLatencyMs = totalLatency,
                 route = routeDecision,
                 model = response.metadata.model
@@ -125,9 +161,11 @@ class ProcessVoiceInputUseCase @Inject constructor(
             Result.success(
                 VoiceProcessingResult(
                     response = response,
+                    audioOutput = ttsOutput,
                     emotion = emotion,
                     intent = intent,
                     routeDecision = routeDecision,
+                    ttsDecision = ttsDecision,
                     metrics = processingMetrics
                 )
             )
@@ -142,8 +180,10 @@ class ProcessVoiceInputUseCase @Inject constructor(
  */
 data class VoiceProcessingResult(
     val response: AIResponse,
+    val audioOutput: TTSOutput?,
     val emotion: Emotion,
     val intent: Intent,
     val routeDecision: RouteDecision,
+    val ttsDecision: TTSDecision,
     val metrics: ProcessingMetrics
 )
