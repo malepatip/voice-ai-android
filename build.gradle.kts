@@ -1,7 +1,7 @@
 // Top-level build file for Voice AI Android
 buildscript {
     extra.apply {
-        set("compose_version", "1.5.4")
+        set("compose_version", "1.5.3")
         set("kotlin_version", "1.9.10")
         set("hilt_version", "2.48")
         set("lifecycle_version", "2.7.0")
