@@ -62,21 +62,16 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-      - name: Encode Google Drive Credentials
-        if: success() && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/'))
-        id: encode_creds
-        run: |
-          echo "encoded=$(echo '${{ secrets.GOOGLE_DRIVE_CREDENTIALS }}' | base64 -w 0)" >> $GITHUB_OUTPUT
-
-      - name: Upload to Google Drive
-        if: success() && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/'))
-        uses: adityak74/google-drive-upload-git-action@v0.3
+      - name: Create GitHub Release
+        if: success() && startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
         with:
-          credentials: ${{ steps.encode_creds.outputs.encoded }}
-          filename: app/build/outputs/apk/debug/app-debug.apk
-          folderId: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
-          name: voice-ai-android-debug-build-${{ github.run_number }}.apk
-          overwrite: "false"
+          files: app/build/outputs/apk/debug/app-debug.apk
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Build Summary
         run: |
@@ -89,20 +84,20 @@ jobs:
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📥 Download Options" >> $GITHUB_STEP_SUMMARY
-          echo "**Option 1: Google Drive (Automatic)**" >> $GITHUB_STEP_SUMMARY
-          echo "- APK automatically uploaded to Google Drive" >> $GITHUB_STEP_SUMMARY
-          echo "- Filename: \`voice-ai-android-debug-build-${{ github.run_number }}.apk\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Open Google Drive on your phone and install directly" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Option 2: GitHub Artifacts**" >> $GITHUB_STEP_SUMMARY
-          echo "1. Scroll down to **Artifacts** section" >> $GITHUB_STEP_SUMMARY
+          echo "**Option 1: GitHub Artifacts** (Available Now)" >> $GITHUB_STEP_SUMMARY
+          echo "1. Scroll down to **Artifacts** section below" >> $GITHUB_STEP_SUMMARY
           echo "2. Download: \`voice-ai-android-debug-${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "3. Transfer to your device" >> $GITHUB_STEP_SUMMARY
+          echo "3. Extract and install on your device" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Option 2: GitHub Releases** (For tagged releases)" >> $GITHUB_STEP_SUMMARY
+          echo "- Create a tag: \`git tag v1.0.0 && git push --tags\`" >> $GITHUB_STEP_SUMMARY
+          echo "- APK will be at: [Releases](https://github.com/${{ github.repository }}/releases)" >> $GITHUB_STEP_SUMMARY
+          echo "- Direct download link, easy to share!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🚀 Quick Install on Android" >> $GITHUB_STEP_SUMMARY
-          echo "1. Open Google Drive app on your Android device" >> $GITHUB_STEP_SUMMARY
-          echo "2. Find the APK file" >> $GITHUB_STEP_SUMMARY
-          echo "3. Tap to install (allow unknown sources if prompted)" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download APK from Artifacts (above) or Releases" >> $GITHUB_STEP_SUMMARY
+          echo "2. Transfer to your Android device (USB, email, etc.)" >> $GITHUB_STEP_SUMMARY
+          echo "3. Tap APK file to install (allow unknown sources if prompted)" >> $GITHUB_STEP_SUMMARY
           echo "4. Grant permissions and test!" >> $GITHUB_STEP_SUMMARY
 
       - name: Comment on PR (if applicable)

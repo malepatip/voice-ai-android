@@ -8,11 +8,11 @@ Voice AI Android Application with Hybrid SLM Architecture (Gemini Nano + Llama 3
 
 ### Download Latest APK (No Build Required!)
 
-**Option 1: Google Drive (Automatic Upload)** ⭐ *Easiest for Mobile!*
-* APKs are automatically uploaded to Google Drive after each successful build
-* Open Google Drive on your Android device
-* Find `voice-ai-android-debug-build-[number].apk`
-* Tap to install directly from Drive!
+**Option 1: GitHub Releases** ⭐ *Best for sharing & installing!*
+1. **Go to [Releases](https://github.com/malepatip/voice-ai-android/releases)**
+2. **Download** the latest APK directly
+3. **Install** on your Android device (or share the download link!)
+4. To create a release: `git tag v1.0.0 && git push --tags`
 
 **Option 2: GitHub Actions Artifacts**
 1. **Go to [Actions Tab](https://github.com/malepatip/voice-ai-android/actions)**
@@ -88,7 +88,7 @@ See **[Quick Build Guide](QUICK_BUILD.md)** for details.
 - [x] TTS integration (Sonic 3)
 - [x] Kubernetes deployment configs
 - [x] GitHub Actions CI/CD
-- [x] **Google Drive auto-upload for APKs** ⭐ *NEW!*
+- [x] **GitHub Releases for APK distribution** ⭐ *NEW!*
 - [x] Comprehensive documentation
 
 ### 🚧 In Progress
