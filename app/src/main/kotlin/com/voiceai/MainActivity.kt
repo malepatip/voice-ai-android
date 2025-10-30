@@ -10,20 +10,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
+import com.voiceai.data.repository.SimpleTTSRepository
+import kotlinx.coroutines.launch
 
 /**
- * Main Activity for Voice AI Android Application
- *
- * TODO: This is a minimal placeholder. Implement full voice AI functionality:
- * - Voice recording with STT
- * - Intent classification with Gemini Nano
- * - LLM inference with Llama 3.2
- * - TTS with Cartesia Sonic 3
- * - Emotion detection and response
+ * Main Activity - Functional TTS Demo
  */
 class MainActivity : ComponentActivity() {
+
+    private lateinit var ttsRepository: SimpleTTSRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        ttsRepository = SimpleTTSRepository(this)
 
         setContent {
             MaterialTheme {
@@ -31,14 +32,19 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    PlaceholderScreen()
+                    TTSScreen()
                 }
             }
         }
     }
 
     @Composable
-    fun PlaceholderScreen() {
+    fun TTSScreen() {
+        var text by remember { mutableStateOf("Hello! This is Voice AI Android with Sonic 3 text-to-speech.") }
+        var isLoading by remember { mutableStateOf(false) }
+        var errorMessage by remember { mutableStateOf<String?>(null) }
+        var successMessage by remember { mutableStateOf<String?>(null) }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -52,71 +58,131 @@ class MainActivity : ComponentActivity() {
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Hybrid SLM Architecture",
+                text = "Sonic 3 TTS Demo",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary
             )
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Card(
+            // Text Input
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text("Enter text to speak") },
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = "Architecture Components:",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "✅ Gemini Nano (on-device)",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        text = "✅ Llama 3.2 (ARM backend)",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        text = "✅ Cartesia Sonic 3 (TTS)",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        text = "✅ Emotion Detection",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        text = "✅ Skills Framework",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Text(
-                text = "Status: Foundation Complete ✅\nImplementation: In Progress 🚧",
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.secondary
+                enabled = !isLoading,
+                minLines = 3,
+                maxLines = 5
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text(
-                text = "See /docs/SONIC3_QUICKSTART.md\nto implement Sonic 3 TTS",
-                style = MaterialTheme.typography.bodySmall,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.outline
-            )
+            // Speak Button
+            Button(
+                onClick = {
+                    if (text.isNotBlank()) {
+                        isLoading = true
+                        errorMessage = null
+                        successMessage = null
+
+                        lifecycleScope.launch {
+                            val result = ttsRepository.speak(text)
+                            isLoading = false
+
+                            result.fold(
+                                onSuccess = {
+                                    successMessage = "✅ Speech completed!"
+                                },
+                                onFailure = { error ->
+                                    errorMessage = "❌ Error: ${error.message}"
+                                }
+                            )
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                enabled = !isLoading && text.isNotBlank()
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Speaking...")
+                } else {
+                    Text(
+                        text = "🔊 Speak",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Status Messages
+            errorMessage?.let {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Text(
+                        text = it,
+                        modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+
+            successMessage?.let {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Text(
+                        text = it,
+                        modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Instructions
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "📝 Setup Required:",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "1. Get API key from cartesia.ai\n" +
+                                "2. Add to local.properties:\n" +
+                                "   SONIC3_API_KEY=your_key_here\n" +
+                                "3. Rebuild the app",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
         }
     }
 }
