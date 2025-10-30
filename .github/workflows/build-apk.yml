@@ -62,11 +62,17 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+      - name: Encode Google Drive Credentials
+        if: success() && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/'))
+        id: encode_creds
+        run: |
+          echo "encoded=$(echo '${{ secrets.GOOGLE_DRIVE_CREDENTIALS }}' | base64 -w 0)" >> $GITHUB_OUTPUT
+
       - name: Upload to Google Drive
         if: success() && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/'))
         uses: adityak74/google-drive-upload-git-action@v0.3
         with:
-          credentials: ${{ secrets.GOOGLE_DRIVE_CREDENTIALS }}
+          credentials: ${{ steps.encode_creds.outputs.encoded }}
           filename: app/build/outputs/apk/debug/app-debug.apk
           folderId: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
           name: voice-ai-android-debug-build-${{ github.run_number }}.apk
