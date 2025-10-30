@@ -56,8 +56,8 @@ dependencies {
     // WebSocket for real-time voice streaming
     implementation("com.squareup.okhttp3:okhttp:${rootProject.extra["okhttp_version"]}")
 
-    // Audio format conversion (if needed for Hume AI compatibility)
-    implementation("com.arthenica:mobile-ffmpeg-audio:4.4.LTS")
+    // Audio format conversion - TODO: Add when implementing audio processing
+    // implementation("com.arthenica:mobile-ffmpeg-audio:4.4.LTS")
 
     // JSON for voice API responses
     implementation("com.google.code.gson:gson:2.10.1")
