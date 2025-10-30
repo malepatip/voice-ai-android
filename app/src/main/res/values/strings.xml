@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Voice AI Android</string>
+    <string name="welcome_title">Voice AI</string>
+    <string name="welcome_subtitle">Hybrid SLM Architecture</string>
+    <string name="architecture_status">Architecture: Ready</string>
+    <string name="on_device_inference">On-Device: Gemini Nano</string>
+    <string name="backend_inference">Backend: Llama 3.2</string>
+    <string name="tts_engine">TTS: Cartesia Sonic 3</string>
+    <string name="router_status">Router: Active</string>
+    <string name="skills_framework">Skills: Framework Ready</string>
+    <string name="coming_soon">Coming Soon</string>
+</resources>
