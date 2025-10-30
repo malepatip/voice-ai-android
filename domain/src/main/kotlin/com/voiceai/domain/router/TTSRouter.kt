@@ -64,7 +64,9 @@ enum class TTSPreference {
 /**
  * Default implementation of TTS router
  */
-class DefaultTTSRouter : TTSRouter {
+class DefaultTTSRouter(
+    private val alwaysUseSonic3: Boolean = true // Simplified mode for testing
+) : TTSRouter {
 
     override fun route(
         response: AIResponse,
@@ -73,17 +75,26 @@ class DefaultTTSRouter : TTSRouter {
         batteryLevel: Float,
         userPreference: TTSPreference
     ): TTSDecision {
-        // Priority 1: Offline mode - must use on-device
+        // SIMPLIFIED MODE: Always use Sonic 3 when available (for testing/development)
+        if (alwaysUseSonic3 && networkAvailable) {
+            return TTSDecision.Sonic3(
+                emotion = emotion?.let { mapEmotionToSonic3(it) },
+                speed = emotion?.let { calculateSpeed(it) } ?: 1.0f
+            )
+        }
+
+        // Fallback to on-device only when offline or explicitly requested
         if (!networkAvailable) {
             return TTSDecision.OnDevice
         }
 
-        // Priority 2: Privacy-first preference
+        // ADVANCED MODE (when alwaysUseSonic3 = false):
+        // Priority 1: Privacy-first preference
         if (userPreference == TTSPreference.PRIVACY_FIRST) {
             return TTSDecision.OnDevice
         }
 
-        // Priority 3: Low battery - preserve power
+        // Priority 2: Low battery - preserve power
         if (batteryLevel < 0.15f) {
             return TTSDecision.OnDevice
         }

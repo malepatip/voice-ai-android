@@ -1,8 +1,12 @@
 # Cartesia Sonic 3 TTS Integration Guide
 
+> **🚀 Quick Start**: For immediate implementation, see [SONIC3_QUICKSTART.md](./SONIC3_QUICKSTART.md) - get Sonic 3 working in 30 minutes!
+
 ## Overview
 
 Cartesia Sonic 3 is a state-of-the-art Text-to-Speech (TTS) model announced in January 2025, designed for real-time conversational AI with emotional expressiveness. This guide analyzes how to integrate Sonic 3 into the Voice AI Android hybrid SLM architecture.
+
+**Current Mode**: Simplified Sonic 3-only implementation for testing (hybrid mode available for future optimization).
 
 ## Sonic 3 Key Features
 
@@ -75,8 +79,33 @@ Cartesia Sonic 3 is a state-of-the-art Text-to-Speech (TTS) model announced in J
 
 ## Integration Strategies for Voice AI Android
 
-### Strategy 1: Hybrid TTS (Recommended)
+### Strategy 1: Sonic 3 Only (Current - Simplified for Testing) ⭐
+Use **Sonic 3 for all TTS** to simplify development and testing.
+
+**Current Implementation**: The router is set to `alwaysUseSonic3 = true` by default.
+
+#### Pros:
+- ✅ Simplest to implement and test
+- ✅ Consistent high-quality voice
+- ✅ Emotional expressiveness everywhere
+- ✅ Ultra-low latency (190ms)
+- ✅ Perfect for development/testing
+
+#### Cons:
+- ❌ Requires network always
+- ❌ Uses credits for all responses
+- ❌ No offline fallback (except error cases)
+
+#### When to Use:
+- Initial development and testing
+- Proof of concept
+- When quality is priority over cost
+- Until ready to optimize costs
+
+### Strategy 2: Hybrid TTS (Future Optimization)
 Use **on-device TTS for simple responses** + **Sonic 3 for emotion-aware responses**
+
+**To Enable**: Set `alwaysUseSonic3 = false` in `DefaultTTSRouter`
 
 #### When to use On-Device TTS:
 - Simple command confirmations: "Timer set for 5 minutes"
