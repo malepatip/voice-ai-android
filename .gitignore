@@ -31,6 +31,8 @@ app/src/main/res/values/secrets.xml
 keystore.properties
 *.keystore
 *.jks
+# Exception: Allow debug keystore for consistent debug builds
+!app/debug.keystore
 
 # Build outputs
 build/
